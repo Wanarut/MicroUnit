@@ -7,8 +7,8 @@ File logFile;
 String logFileName;
 bool hasRTC = false;
 bool hasSD = false;
-bool deleteDupicateFile = true;
-//bool deleteDupicateFile = false;
+//bool deleteDupicateFile = true;
+bool deleteDupicateFile = false;
 
 const int sharpSensor_1[] = {2, A0};
 const int sharpSensor_2[] = {3, A1};
@@ -45,10 +45,15 @@ void loop() {
   if (loop_cur_mil - loop_pre_mil >= 1000) {
     String date_now = getDateString();
     String time_now = getTimeString();
-    String Data_1 = String(1.0 * getDustDensity(sharpSensor_1[0], sharpSensor_1[1], 0));
-    String Data_2 = String(1.5 * getDustDensity(sharpSensor_2[0], sharpSensor_2[1], 1));
-    String record = date_now + ',' + time_now + ',' + Data_1 + ',' + Data_2;
-    String record_2 = date_now + ' ' + time_now + '\t' + Data_1 + '\t' + Data_2;
+    float pm25_in = 1.0 * getDustDensity(sharpSensor_1[0], sharpSensor_1[1], 0);
+    float pm25_out = 1.0 * getDustDensity(sharpSensor_2[0], sharpSensor_2[1], 1) + 11;
+    float Eff = abs(pm25_in - pm25_out) / (pm25_in + 1);
+
+    String Data_1 = String(pm25_in);
+    String Data_2 = String(pm25_out);
+    String Data_3 = String(Eff);
+    String record = date_now + ',' + time_now + ',' + Data_1 + ',' + Data_2 + ',' + Data_3;
+    String record_2 = date_now + ' ' + time_now + '\t' + Data_1 + '\t' + Data_2 + '\t' + Data_3;
 
     if (hasSD) {
       logFile = SD.open(logFileName.c_str(), FILE_WRITE);
@@ -132,7 +137,7 @@ void createlogFile() {
       Serial.println("Removing " + logFileName);
       Serial.println("Creating " + logFileName);
       logFile = SD.open(logFileName.c_str(), FILE_WRITE);
-      logFile.println("Date,Time,Data_1,Data_2");
+      logFile.println("Date,Time,PM2.5_in,PM2.5_out,Efficient");
       logFile.close();
     }
   } else {
@@ -140,7 +145,7 @@ void createlogFile() {
 
     Serial.println("Creating " + logFileName);
     logFile = SD.open(logFileName.c_str(), FILE_WRITE);
-    logFile.println("Date,Time,Data_1,Data_2");
+    logFile.println("Date,Time,PM2.5_in,PM2.5_out,Efficient");
     logFile.close();
   }
 }
