@@ -45,8 +45,18 @@ void loop() {
   if (loop_cur_mil - loop_pre_mil >= 1000) {
     String date_now = getDateString();
     String time_now = getTimeString();
-    float pm25_in = 1.0 * getDustDensity(sharpSensor_1[0], sharpSensor_1[1], 0);
-    float pm25_out = 1.0 * getDustDensity(sharpSensor_2[0], sharpSensor_2[1], 1) + 11;
+    float sensor_1 = 1.0 * getDustDensity(sharpSensor_1[0], sharpSensor_1[1], 0);
+    float sensor_2 = 1.0 * getDustDensity(sharpSensor_2[0], sharpSensor_2[1], 1);
+
+    float pm25_in;
+    float pm25_out;
+    if (sensor_1 > sensor_2) {
+      pm25_in = sensor_1;
+      pm25_out = sensor_2;
+    } else {
+      pm25_in = sensor_2;
+      pm25_out = sensor_1;
+    }
     float Eff = abs(pm25_in - pm25_out) / (pm25_in + 1);
 
     String Data_1 = String(pm25_in);
