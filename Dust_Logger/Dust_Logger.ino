@@ -1,5 +1,8 @@
 #include <RTClib.h>
 #include <SD.h>
+#include <Arduino.h>
+#include <hpma115S0.h>
+#include <SoftwareSerial.h>
 
 RTC_DS1307 rtc;
 const int chipSelect = 10;
@@ -10,8 +13,14 @@ bool hasSD = false;
 //bool deleteDupicateFile = true;
 bool deleteDupicateFile = false;
 
-const int sharpSensor_1[] = {2, A0};
-const int sharpSensor_2[] = {3, A1};
+//const int sharpSensor_1[] = {2, A0};
+//const int sharpSensor_2[] = {3, A1};
+
+SoftwareSerial hpmaSerial_0(A0, 2); // Feather TX, Feather RX
+SoftwareSerial hpmaSerial_1(A1, 3); // Feather TX, Feather RX
+//Create an instance of the hpma115S0 library
+HPMA115S0 hpma115S0_0(hpmaSerial_0);
+HPMA115S0 hpma115S0_1(hpmaSerial_1);
 
 // For averaging last N raw voltage readings.
 #define N 100
@@ -23,19 +32,26 @@ const float K = 0.5;
 void setup() {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
+  hpmaSerial_0.begin(9600);
+  hpmaSerial_1.begin(9600);
   // wait for Serial Monitor to connect. Needed for native USB port boards only:
   while (!Serial);
   //Check Module
   checkModule();
   if (hasSD) createlogFile();
 
-  pinMode(sharpSensor_1[0], OUTPUT);
-  pinMode(sharpSensor_2[0], OUTPUT);
+  //  pinMode(sharpSensor_1[0], OUTPUT);
+  //  pinMode(sharpSensor_2[0], OUTPUT);
   // Wait two seconds for startup.
   delay(2000);
   Serial.println("===================");
   Serial.println("!Start Dust Looger!");
   Serial.println("===================");
+  hpma115S0_0.Init();
+  hpma115S0_1.Init();
+  delay(100);
+  hpma115S0_0.StartParticleMeasurement();
+  hpma115S0_1.StartParticleMeasurement();
 }
 
 static unsigned long loop_cur_mil;
@@ -45,19 +61,23 @@ void loop() {
   if (loop_cur_mil - loop_pre_mil >= 1000) {
     String date_now = getDateString();
     String time_now = getTimeString();
-    float sensor_1 = 1.0 * getDustDensity(sharpSensor_1[0], sharpSensor_1[1], 0);
-    float sensor_2 = 1.0 * getDustDensity(sharpSensor_2[0], sharpSensor_2[1], 1);
+    //    float sensor_1 = 1.0 * getDustDensity(sharpSensor_1[0], sharpSensor_1[1], 0);
+    //    float sensor_2 = 1.0 * getDustDensity(sharpSensor_2[0], sharpSensor_2[1], 1);
+    unsigned int pm25_0, pm10_0, pm25_1, pm10_1;
+    hpmaSerial_0.listen();
+    while (!hpma115S0_0.ReadParticleMeasurement(&pm25_0, &pm10_0));
+    hpmaSerial_1.listen();
+    while (!hpma115S0_1.ReadParticleMeasurement(&pm25_1, &pm10_1));
 
-    float pm25_in;
-    float pm25_out;
-    if (sensor_1 > sensor_2) {
-      pm25_in = sensor_1;
-      pm25_out = sensor_2;
+    float pm25_in, pm25_out;
+    if (pm25_0 > pm25_1) {
+      pm25_in = pm25_0;
+      pm25_out = pm25_1;
     } else {
-      pm25_in = sensor_2;
-      pm25_out = sensor_1;
+      pm25_in = pm25_1;
+      pm25_out = pm25_0;
     }
-    float Eff = abs(pm25_in - pm25_out) / (pm25_in + 1);
+    float Eff = (pm25_in - pm25_out) / (pm25_in + 1);
 
     String Data_1 = String(pm25_in);
     String Data_2 = String(pm25_out);
