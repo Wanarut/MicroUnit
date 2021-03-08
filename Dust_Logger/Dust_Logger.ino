@@ -1,8 +1,8 @@
 #include <RTClib.h>
 #include <SD.h>
 #include <Arduino.h>
-#include <hpma115S0.h>
 #include <SoftwareSerial.h>
+#include <PMS.h>
 
 RTC_DS1307 rtc;
 const int chipSelect = 10;
@@ -13,45 +13,32 @@ bool hasSD = false;
 //bool deleteDupicateFile = true;
 bool deleteDupicateFile = false;
 
-//const int sharpSensor_1[] = {2, A0};
-//const int sharpSensor_2[] = {3, A1};
-
-SoftwareSerial hpmaSerial_0(A0, 2); // Feather TX, Feather RX
-SoftwareSerial hpmaSerial_1(A1, 3); // Feather TX, Feather RX
-//Create an instance of the hpma115S0 library
-HPMA115S0 hpma115S0_0(hpmaSerial_0);
-HPMA115S0 hpma115S0_1(hpmaSerial_1);
-
-// For averaging last N raw voltage readings.
-#define N 100
-// Set the typical output voltage in Volts when there is zero dust.
-static float Voc[] = {0.6, 0.6};
-// Use the typical sensitivity in units of V per 100ug/m3.
-const float K = 0.5;
+SoftwareSerial pmsSerial_0(A0, 2); // Feather TX, Feather RX
+SoftwareSerial pmsSerial_1(A1, 3); // Feather TX, Feather RX
+PMS pms_0(pmsSerial_0);
+PMS pms_1(pmsSerial_1);
+PMS::DATA data_0;
+PMS::DATA data_1;
 
 void setup() {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
-  hpmaSerial_0.begin(9600);
-  hpmaSerial_1.begin(9600);
+  pmsSerial_0.begin(9600);
+  pmsSerial_1.begin(9600);
   // wait for Serial Monitor to connect. Needed for native USB port boards only:
   while (!Serial);
+  while (!pmsSerial_0);
+  while (!pmsSerial_1);
+
   //Check Module
   checkModule();
   if (hasSD) createlogFile();
 
-  //  pinMode(sharpSensor_1[0], OUTPUT);
-  //  pinMode(sharpSensor_2[0], OUTPUT);
   // Wait two seconds for startup.
   delay(2000);
   Serial.println("===================");
   Serial.println("!Start Dust Looger!");
   Serial.println("===================");
-  hpma115S0_0.Init();
-  hpma115S0_1.Init();
-  delay(100);
-  hpma115S0_0.StartParticleMeasurement();
-  hpma115S0_1.StartParticleMeasurement();
 }
 
 static unsigned long loop_cur_mil;
@@ -61,14 +48,21 @@ void loop() {
   if (loop_cur_mil - loop_pre_mil >= 1000) {
     String date_now = getDateString();
     String time_now = getTimeString();
-    //    float sensor_1 = 1.0 * getDustDensity(sharpSensor_1[0], sharpSensor_1[1], 0);
-    //    float sensor_2 = 1.0 * getDustDensity(sharpSensor_2[0], sharpSensor_2[1], 1);
-    unsigned int pm25_0, pm10_0, pm25_1, pm10_1;
-    hpmaSerial_0.listen();
-    while (!hpma115S0_0.ReadParticleMeasurement(&pm25_0, &pm10_0));
-    hpmaSerial_1.listen();
-    while (!hpma115S0_1.ReadParticleMeasurement(&pm25_1, &pm10_1));
 
+    unsigned int pm01_0, pm25_0, pm10_0, pm01_1, pm25_1, pm10_1;
+    pmsSerial_0.listen();
+    while (!pms_0.read(data_0));
+    pmsSerial_1.listen();
+    while (!pms_1.read(data_1));
+
+    pm01_0 = data_0.PM_AE_UG_1_0;
+    pm25_0 = data_0.PM_AE_UG_2_5;
+    pm10_0 = data_0.PM_AE_UG_10_0;
+
+    pm01_1 = data_1.PM_AE_UG_1_0;
+    pm25_1 = data_1.PM_AE_UG_2_5;
+    pm10_1 = data_1.PM_AE_UG_10_0;
+    
     float pm25_in, pm25_out;
     if (pm25_0 > pm25_1) {
       pm25_in = pm25_0;
@@ -94,49 +88,6 @@ void loop() {
 
     loop_pre_mil = loop_cur_mil;
   }
-}
-
-static unsigned long cur_mil;
-static unsigned long pre_mil;
-float getDustDensity(int sharpLEDPin, int sharpVoPin, int i) {
-  unsigned long VoRawTotal = 0;
-  int VoRawCount = 0;
-  while (true) {
-    cur_mil = millis();
-    // Wait for remainder of the 10ms cycle
-    if (cur_mil - pre_mil >= 10) {
-      // Turn on the dust sensor LED by setting digital pin LOW.
-      digitalWrite(sharpLEDPin, LOW);
-      // Wait 0.28ms before taking a reading of the output voltage as per spec.
-      delayMicroseconds(280);
-      // Record the output voltage. This operation takes around 100 microseconds.
-      int VoRaw = analogRead(sharpVoPin);
-      // Turn the dust sensor LED off by setting digital pin HIGH.
-      digitalWrite(sharpLEDPin, HIGH);
-
-      VoRawTotal += VoRaw;
-      VoRawCount++;
-      pre_mil = cur_mil;
-
-      if ( VoRawCount >= N ) {
-        return calculateDustDensity(1.0 * VoRawTotal / N, i);
-      }
-    }
-  }
-}
-
-float calculateDustDensity(float aVo, int i) {
-  // Compute the output voltage in Volts.
-  float Vo = aVo / 1024.0 * 5.0;
-
-  // Convert to Dust Density in units of ug/m3.
-  float dV = Vo - Voc[i];
-  if ( dV < 0 ) {
-    dV = 0;
-    Voc[i] = Vo;
-  }
-  float dustDensity = dV / K * 100.0;
-  return dustDensity;
 }
 
 void checkModule() {

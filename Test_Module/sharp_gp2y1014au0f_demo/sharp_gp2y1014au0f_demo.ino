@@ -25,7 +25,7 @@ const int sharpVoPin = A0;   // Arduino analog pin 5 connect to sensor Vo.
 static float Voc = 0.6;
 
 // Use the typical sensitivity in units of V per 100ug/m3.
-const float K = 0.5;
+const float K = 0.11;
 
 /////////////////////////////////////////////////////////////////////////////
 
